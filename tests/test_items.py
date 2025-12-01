@@ -11,7 +11,8 @@ def test_root():
 
 
 def test_create_item():
-    resp = client.post("/items", json={"name": "Item 1", "description": "desc"})
+    resp = client.post("/items", 
+    json={"name": "Item 1", "description": "desc"})
     assert resp.status_code == 201
     data = resp.json()
     assert data["id"] == 1
@@ -35,7 +36,8 @@ def test_get_item():
 
 
 def test_update_item():
-    resp = client.put("/items/1", json={"name": "Item 1 editado", "description": "nueva desc"})
+    resp = client.put("/items/1", 
+    json={"name": "Item 1 editado", "description": "nueva desc"})
     assert resp.status_code == 200
     data = resp.json()
     assert data["name"] == "Item 1 editado"
