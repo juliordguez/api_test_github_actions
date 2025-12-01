@@ -10,4 +10,3 @@ class ItemBase(BaseModel):
 
 class Item(ItemBase):
     id: int
-
