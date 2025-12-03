@@ -301,116 +301,47 @@ jobs:
         continue-on-error: true  # Permite que el workflow continúe si no hay archivo
 
 
-  notify:
-    name: Notify Status
-    runs-on: ubuntu-latest
-    needs: [quality-checks, test, security-scan, build-docker]
-    if: always()
-    
-    steps:
-      - name: Setup job status variables
-        id: status
-        run: |
-          # Determinar estado general
-          if [[ "${{ needs.quality-checks.result }}" == "success" && 
-                "${{ needs.test.result }}" == "success" &&
-                "${{ needs.security-scan.result }}" == "success" &&
-                "${{ needs.build-docker.result }}" == "success" ]]; then
-            echo "overall_status=SUCCESS 🎉" >> $GITHUB_OUTPUT
-            echo "color=good" >> $GITHUB_OUTPUT
-          elif [[ "${{ needs.quality-checks.result }}" == "cancelled" ||
-                  "${{ needs.test.result }}" == "cancelled" ||
-                  "${{ needs.security-scan.result }}" == "cancelled" ||
-                  "${{ needs.build-docker.result }}" == "cancelled" ]]; then
-            echo "overall_status=CANCELLED ⚠️" >> $GITHUB_OUTPUT
-            echo "color=warning" >> $GITHUB_OUTPUT
-          else
-            echo "overall_status=FAILED ❌" >> $GITHUB_OUTPUT
-            echo "color=danger" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Notify Slack on Status Change
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          author_name: GitHub Actions
-          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
-          channel: '#github-actions'  # Especificar canal
-          username: 'GitHub Actions Bot'
-          icon_emoji: ':github:'
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      - name: Notify Discord (opcional)
+      - name: Create GitHub Workflow Status Comment
         if: always()
-        uses: sarisia/actions-status-discord@v1
+        uses: actions/github-script@v7
         with:
-          webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          title: "Pipeline: ${{ steps.status.outputs.overall_status }}"
-          description: |
-            **Repository:** ${{ github.repository }}
-            **Branch:** ${{ github.ref_name }}
-            **Commit:** ${{ github.sha }}
-            **Workflow:** ${{ github.workflow }}
-          color: ${{ steps.status.outputs.color }}
-          url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-      - name: Create Detailed Summary Report
-        run: |
-          echo "# CI/CD Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "## 🚀 Execution Details" >> $GITHUB_STEP_SUMMARY
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Date** | $(date '+%Y-%m-%d %H:%M:%S UTC') |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Repository** | ${{ github.repository }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Branch** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | [${{ github.sha }}](https://github.com/${{ github.repository }}/commit/${{ github.sha }}) |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Workflow** | [${{ github.workflow }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          echo "## 📊 Jobs Status" >> $GITHUB_STEP_SUMMARY
-          echo "| Job | Status | Duration |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|----------|" >> $GITHUB_STEP_SUMMARY
-          
-          # Agregar cada job con su estado
-          echo "| Quality Checks | ${{ needs.quality-checks.result }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests | ${{ needs.test.result }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security Scan | ${{ needs.security-scan.result }} | - |" >> $GITHUB_STEP_SUMMARY
-          echo "| Build Docker | ${{ needs.build-docker.result }} | - |" >> $GITHUB_STEP_SUMMARY
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 📈 Overall Status: **${{ steps.status.outputs.overall_status }}**" >> $GITHUB_STEP_SUMMARY
-          
-          if [[ "${{ steps.status.outputs.overall_status }}" == "SUCCESS 🎉" ]]; then
-            echo "✅ All checks passed successfully!" >> $GITHUB_STEP_SUMMARY
-          elif [[ "${{ steps.status.outputs.overall_status }}" == "FAILED ❌" ]]; then
-            echo "❌ Some checks failed. Please review the logs." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "### Failed Jobs:" >> $GITHUB_STEP_SUMMARY
-            [[ "${{ needs.quality-checks.result }}" != "success" ]] && echo "- Quality Checks" >> $GITHUB_STEP_SUMMARY
-            [[ "${{ needs.test.result }}" != "success" ]] && echo "- Tests" >> $GITHUB_STEP_SUMMARY
-            [[ "${{ needs.security-scan.result }}" != "success" ]] && echo "- Security Scan" >> $GITHUB_STEP_SUMMARY
-            [[ "${{ needs.build-docker.result }}" != "success" ]] && echo "- Build Docker" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "*Pipeline completed*" >> $GITHUB_STEP_SUMMARY
-
-      - name: Add failed job logs to summary
-        if: failure()
-        run: |
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## 🔍 Failed Job Details" >> $GITHUB_STEP_SUMMARY
-          
-          # Obtener IDs de jobs fallidos
-          FAILED_JOBS=""
-          [[ "${{ needs.quality-checks.result }}" != "success" ]] && FAILED_JOBS="$FAILED_JOBS quality-checks"
-          [[ "${{ needs.test.result }}" != "success" ]] && FAILED_JOBS="$FAILED_JOBS test"
-          [[ "${{ needs.security-scan.result }}" != "success" ]] && FAILED_JOBS="$FAILED_JOBS security-scan"
-          [[ "${{ needs.build-docker.result }}" != "success" ]] && FAILED_JOBS="$FAILED_JOBS build-docker"
-          
-          for job in $FAILED_JOBS; do
-            echo "### $job" >> $GITHUB_STEP_SUMMARY
-            echo "- [View logs](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
-          done
+          script: |
+            const status = "${{ steps.status.outputs.overall_status }}";
+            const repo = "${{ github.repository }}";
+            const branch = "${{ github.ref_name }}";
+            const runId = "${{ github.run_id }}";
+            const sha = "${{ github.sha }}";
+            
+            const comment = `## CI/CD Pipeline Status: ${status}
+            
+            **Repository:** ${repo}
+            **Branch:** ${branch}
+            **Commit:** ${sha}
+            **Workflow Run:** [#${runId}](https://github.com/${repo}/actions/runs/${runId})
+            
+            ### Jobs Status:
+            - Quality Checks: ${{ needs.quality-checks.result }}
+            - Tests: ${{ needs.test.result }}
+            - Security Scan: ${{ needs.security-scan.result }}
+            - Build Docker: ${{ needs.build-docker.result }}
+            
+            ---
+            *Pipeline execution completed*`;
+            
+            // Comentar en el PR si existe
+            if (context.payload.pull_request) {
+              github.rest.issues.createComment({
+                issue_number: context.payload.pull_request.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+            
+            // También crear un comment en el commit
+            github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: sha,
+              body: comment
+            });
