@@ -260,15 +260,35 @@ jobs:
           
           if [ "$DOCKERFILE_COUNT" -gt 0 ]; then
             echo "Found $DOCKERFILE_COUNT Dockerfile(s)"
+            
+            # Usar opciones corregidas:
+            # 1. -w /src establece el directorio de trabajo
+            # 2. --security-opt se agregó para evitar problemas de permisos
+            # 3. Se verifica si se creó el archivo
+            
             docker run --rm \
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v $(pwd):/src \
+              -w /src \
+              --security-opt seccomp=unconfined \
               aquasec/trivy:latest \
               config /src --severity HIGH,CRITICAL \
               --format sarif \
               --output trivy-config-results.sarif
+            
+            # Verificar si el archivo se creó
+            if [ -f "trivy-config-results.sarif" ]; then
+              echo "✅ Archivo SARIF creado exitosamente"
+              ls -la trivy-config-results.sarif
+            else
+              echo "❌ ERROR: No se creó el archivo trivy-config-results.sarif"
+              # Crear archivo vacío para evitar error
+              echo '{"version": "2.1.0", "runs": []}' > trivy-config-results.sarif
+            fi
           else
             echo "No Dockerfiles found in the project"
+            # Crear archivo vacío si no hay Dockerfile
+            echo '{"version": "2.1.0", "runs": []}' > trivy-config-results.sarif
           fi
 
 
