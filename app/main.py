@@ -1,7 +1,9 @@
 from fastapi import FastAPI, HTTPException
 from typing import List, Dict
 from .models.models import Item, ItemBase
-
+import os
+from datetime import datetime
+import psutil
 
 app = FastAPI(title="API CRUD básica con FastAPI")
 
@@ -51,3 +53,20 @@ def delete_item(item_id: int):
         raise HTTPException(status_code=404, detail="Item no encontrado")
     del db[item_id]
     return
+
+
+@app.get("/health")
+async def health_check():
+    """Endpoint de health check con métricas del sistema"""
+    return {
+        "status": "healthy",
+        "service": "api-test-github-actions",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0.0",
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "system": {
+            "cpu_percent": psutil.cpu_percent(),
+            "memory_percent": psutil.virtual_memory().percent,
+            "disk_usage": psutil.disk_usage('/').percent
+        }
+    }
